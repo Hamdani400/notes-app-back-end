@@ -6,8 +6,25 @@ const { mapDBToModel } = require("../../utils");
 const NotFoundError = require("../../exceptions/NotFoundError");
 
 class NotesServices {
-  constructor() {
+  constructor(collaborationService) {
     this._pool = new Pool();
+    this._collaborationService = collaborationService;
+  }
+
+  async verifyNoteAccess(noteId, userId) {
+    try {
+      await this.verifyNoteOwner(noteId, userId);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+
+      try {
+        await this._collaborationService.verifyCollaborator(noteId, userId);
+      } catch (error) {
+        throw error;
+      }
+    }
   }
 
   async verifyNoteOwner(id, owner) {
@@ -47,7 +64,7 @@ class NotesServices {
 
   async getNotes(owner) {
     const query = {
-      text: "SELECT * FROM notes WHERE owner = $1",
+      text: "SELECT notes.* FROM notes LEFT JOIN collaborations ON collaborations.note_id = notes.id WHERE notes.owner = $1 OR collaborations.user_id = $1 GROUP BY notes.id",
       values: [owner],
     };
 
